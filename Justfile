@@ -6,7 +6,7 @@ choose:
 test:
     codecrafters test
 
-submit:
+run:
     codecrafters submit
 
 lint:
@@ -14,6 +14,3 @@ lint:
 
 build:
     cargo build
-
-run:
-    cargo run

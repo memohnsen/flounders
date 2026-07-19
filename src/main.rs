@@ -1,6 +1,6 @@
-#![allow(unused_variables)]
-use std::env;
-use std::fs;
+use std::{env, fs};
+
+use codecrafters_interpreter::scanner::scanner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -14,18 +14,15 @@ fn main() {
 
     match command.as_str() {
         "tokenize" => {
-            // You can use print statements as follows for debugging, they'll be visible when running tests.
-            eprintln!("Logs from your program will appear here!");
-
             let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
                 eprintln!("Failed to read file {}", filename);
                 String::new()
             });
 
             if !file_contents.is_empty() {
-                panic!("Scanner not implemented");
+                scanner(file_contents);
             } else {
-                println!("EOF  null"); // Placeholder, replace this line when implementing the scanner
+                println!("EOF  null");
             }
         }
         _ => {
