@@ -1,10 +1,51 @@
 use crate::TokenType;
 
 #[derive(Debug)]
-struct Scanner {
-    token_type: TokenType,
-    lexeme: String,
-    literal: String,
+pub struct Scanner {
+    pub token_type: TokenType,
+    pub lexeme: String,
+    pub literal: String,
+    pub invalid_char: Option<bool>,
+}
+
+impl Default for Scanner {
+    fn default() -> Self {
+        Self {
+            token_type: TokenType::LeftParen,
+            lexeme: "".to_string(),
+            literal: "".to_string(),
+            invalid_char: None,
+        }
+    }
+}
+
+impl Scanner {
+    pub fn scan(&mut self, contents: String) {
+        let mut end_of_file = false;
+
+        while !end_of_file {
+            let lines: Vec<&str> = contents.lines().collect();
+
+            for (current_line, line) in lines.into_iter().enumerate() {
+                let current_line = current_line + 1;
+
+                for c in line.chars() {
+                    if from_lexeme(&c.to_string()).is_none() {
+                        eprintln!("[line {}] Error: Unexpected character: {}", current_line, c);
+                        self.invalid_char = Some(true);
+                    } else {
+                        self.token_type =
+                            from_lexeme(&c.to_string()).unwrap_or(TokenType::Identifier);
+                        self.lexeme = c.to_string();
+                        self.literal = "null".to_string();
+
+                        println!("{} {} {}", self.token_type, self.lexeme, self.literal);
+                    };
+                }
+            }
+            end_of_file = true;
+        }
+    }
 }
 
 pub fn from_lexeme(lexeme: &str) -> Option<TokenType> {
@@ -46,37 +87,4 @@ pub fn from_lexeme(lexeme: &str) -> Option<TokenType> {
         "while" => Some(TokenType::While),
         _ => None,
     }
-}
-
-pub fn scanner(contents: String) -> u8 {
-    let mut end_of_file = false;
-
-    while !end_of_file {
-        let lines: Vec<&str> = contents.lines().collect();
-
-        for (current_line, line) in lines.into_iter().enumerate() {
-            let current_line = current_line + 1;
-
-            for c in line.chars() {
-                if from_lexeme(&c.to_string()).is_none() {
-                    eprintln!("[line {}] Error: Unexpected character: {}", current_line, c);
-                    return 65;
-                };
-
-                let scanned_line = Scanner {
-                    token_type: from_lexeme(&c.to_string()).unwrap_or(TokenType::Identifier),
-                    lexeme: c.to_string(),
-                    literal: "null".to_string(),
-                };
-
-                println!(
-                    "{} {} {}",
-                    scanned_line.token_type, scanned_line.lexeme, scanned_line.literal
-                );
-            }
-        }
-        end_of_file = true;
-    }
-
-    0
 }
