@@ -48,19 +48,19 @@ impl Scanner {
                 let mut chars = line.chars().peekable();
 
                 while let Some(current) = chars.next() {
-                    let handle_double_chars = match_next_char(current, chars.peek());
-                    if handle_double_chars.len() > 1 {
+                    let lex = match_next_char(current, chars.peek());
+                    if lex.len() > 1 || lex == " " {
                         chars.next();
                     }
 
-                    if handle_double_chars == "//" {
+                    if lex == "//" {
                         break;
                     }
 
-                    if from_lexeme(&handle_double_chars).is_none() {
+                    if from_lexeme(&lex).is_none() {
                         self.print_error(current_line, current);
                     } else {
-                        self.lex_char(handle_double_chars);
+                        self.lex_char(lex);
                     };
                 }
             }
