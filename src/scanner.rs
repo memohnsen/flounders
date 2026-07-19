@@ -28,15 +28,24 @@ impl Scanner {
 
             for (current_line, line) in lines.into_iter().enumerate() {
                 let current_line = current_line + 1;
+                let mut chars = line.chars().peekable();
 
-                for c in line.chars() {
-                    if from_lexeme(&c.to_string()).is_none() {
-                        eprintln!("[line {}] Error: Unexpected character: {}", current_line, c);
+                while let Some(current) = chars.next() {
+                    let handle_double_chars = match_next_char(current, chars.peek());
+                    if handle_double_chars.len() > 1 {
+                        chars.next();
+                    }
+
+                    if from_lexeme(&handle_double_chars).is_none() {
+                        eprintln!(
+                            "[line {}] Error: Unexpected character: {}",
+                            current_line, current
+                        );
                         self.invalid_char = Some(true);
                     } else {
-                        self.token_type =
-                            from_lexeme(&c.to_string()).unwrap_or(TokenType::Identifier);
-                        self.lexeme = c.to_string();
+                        self.token_type = from_lexeme(&handle_double_chars.to_string())
+                            .unwrap_or(TokenType::Identifier);
+                        self.lexeme = handle_double_chars.to_string();
                         self.literal = "null".to_string();
 
                         println!("{} {} {}", self.token_type, self.lexeme, self.literal);
@@ -45,6 +54,35 @@ impl Scanner {
             }
             end_of_file = true;
         }
+    }
+}
+
+// Look at the current char and the next char to see if they make up a lexeme together
+// <= >= != ==
+// if not just return back the string
+pub fn match_next_char(current: char, next: Option<&char>) -> String {
+    if next.is_none() {
+        return current.to_string();
+    }
+
+    match current {
+        '=' => match next.unwrap_or(&'=') {
+            '=' => "==".to_string(),
+            _ => current.to_string(),
+        },
+        '!' => match next.unwrap_or(&'!') {
+            '=' => "!=".to_string(),
+            _ => current.to_string(),
+        },
+        '<' => match next.unwrap_or(&'<') {
+            '=' => "<=".to_string(),
+            _ => current.to_string(),
+        },
+        '>' => match next.unwrap_or(&'>') {
+            '=' => ">=".to_string(),
+            _ => current.to_string(),
+        },
+        _ => current.to_string(),
     }
 }
 
