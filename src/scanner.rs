@@ -20,14 +20,31 @@ impl Default for Scanner {
 }
 
 impl Scanner {
+    fn print_error(&mut self, current_line: usize, current: char) {
+        eprintln!(
+            "[line {}] Error: Unexpected character: {}",
+            current_line, current
+        );
+        self.invalid_char = Some(true);
+    }
+
+    fn lex_char(&mut self, handle_double_chars: String) {
+        self.token_type =
+            from_lexeme(&handle_double_chars.to_string()).unwrap_or(TokenType::Identifier);
+        self.lexeme = handle_double_chars.to_string();
+        self.literal = "null".to_string();
+
+        println!("{} {} {}", self.token_type, self.lexeme, self.literal);
+    }
+
     pub fn scan(&mut self, contents: String) {
         let mut end_of_file = false;
 
         while !end_of_file {
             let lines: Vec<&str> = contents.lines().collect();
 
-            for (current_line, line) in lines.into_iter().enumerate() {
-                let current_line = current_line + 1;
+            for (mut current_line, line) in lines.into_iter().enumerate() {
+                current_line += 1;
                 let mut chars = line.chars().peekable();
 
                 while let Some(current) = chars.next() {
@@ -36,19 +53,14 @@ impl Scanner {
                         chars.next();
                     }
 
-                    if from_lexeme(&handle_double_chars).is_none() {
-                        eprintln!(
-                            "[line {}] Error: Unexpected character: {}",
-                            current_line, current
-                        );
-                        self.invalid_char = Some(true);
-                    } else {
-                        self.token_type = from_lexeme(&handle_double_chars.to_string())
-                            .unwrap_or(TokenType::Identifier);
-                        self.lexeme = handle_double_chars.to_string();
-                        self.literal = "null".to_string();
+                    if handle_double_chars == "//" {
+                        break;
+                    }
 
-                        println!("{} {} {}", self.token_type, self.lexeme, self.literal);
+                    if from_lexeme(&handle_double_chars).is_none() {
+                        self.print_error(current_line, current);
+                    } else {
+                        self.lex_char(handle_double_chars);
                     };
                 }
             }
@@ -60,7 +72,7 @@ impl Scanner {
 // Look at the current char and the next char to see if they make up a lexeme together
 // <= >= != ==
 // if not just return back the string
-pub fn match_next_char(current: char, next: Option<&char>) -> String {
+fn match_next_char(current: char, next: Option<&char>) -> String {
     if next.is_none() {
         return current.to_string();
     }
@@ -82,11 +94,15 @@ pub fn match_next_char(current: char, next: Option<&char>) -> String {
             '=' => ">=".to_string(),
             _ => current.to_string(),
         },
+        '/' => match next.unwrap_or(&'/') {
+            '/' => "//".to_string(),
+            _ => current.to_string(),
+        },
         _ => current.to_string(),
     }
 }
 
-pub fn from_lexeme(lexeme: &str) -> Option<TokenType> {
+fn from_lexeme(lexeme: &str) -> Option<TokenType> {
     match lexeme {
         "(" => Some(TokenType::LeftParen),
         ")" => Some(TokenType::RightParen),
