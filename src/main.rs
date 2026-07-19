@@ -1,16 +1,17 @@
-use std::{env, fs};
+use std::{env, fs, process::ExitCode};
 
 use codecrafters_interpreter::scanner::scanner;
 
-fn main() {
+fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         eprintln!("Usage: {} tokenize <filename>", args[0]);
-        return;
     }
 
     let command = &args[1];
     let filename = &args[2];
+
+    let mut exit_code = 0;
 
     match command.as_str() {
         "tokenize" => {
@@ -20,13 +21,15 @@ fn main() {
             });
 
             if !file_contents.is_empty() {
-                scanner(file_contents);
-            } else {
+                exit_code = scanner(file_contents);
                 println!("EOF  null");
             }
+
+            ExitCode::from(exit_code)
         }
         _ => {
             eprintln!("Unknown command: {}", command);
+            ExitCode::FAILURE
         }
     }
 }

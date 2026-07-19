@@ -48,14 +48,21 @@ pub fn from_lexeme(lexeme: &str) -> Option<TokenType> {
     }
 }
 
-pub fn scanner(contents: String) {
+pub fn scanner(contents: String) -> u8 {
     let mut end_of_file = false;
 
     while !end_of_file {
         let lines: Vec<&str> = contents.lines().collect();
 
-        for line in lines {
+        for (current_line, line) in lines.into_iter().enumerate() {
+            let current_line = current_line + 1;
+
             for c in line.chars() {
+                if from_lexeme(&c.to_string()).is_none() {
+                    eprintln!("[line {}] Error: Unexpected character: {}", current_line, c);
+                    return 65;
+                };
+
                 let scanned_line = Scanner {
                     token_type: from_lexeme(&c.to_string()).unwrap_or(TokenType::Identifier),
                     lexeme: c.to_string(),
@@ -70,5 +77,6 @@ pub fn scanner(contents: String) {
         }
         end_of_file = true;
     }
-    println!("EOF  null");
+
+    0
 }
