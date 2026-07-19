@@ -49,12 +49,16 @@ impl Scanner {
 
                 while let Some(current) = chars.next() {
                     let lex = match_next_char(current, chars.peek());
-                    if lex.len() > 1 || lex == " " {
+                    if lex.len() > 1 {
                         chars.next();
                     }
 
                     if lex == "//" {
                         break;
+                    }
+
+                    if is_whitespace(&lex) {
+                        continue;
                     }
 
                     if from_lexeme(&lex).is_none() {
@@ -67,6 +71,10 @@ impl Scanner {
             end_of_file = true;
         }
     }
+}
+
+fn is_whitespace(current: &str) -> bool {
+    current == " " || current == "\n" || current == "\t" || current == "\r"
 }
 
 // Look at the current char and the next char to see if they make up a lexeme together
