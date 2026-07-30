@@ -28,11 +28,16 @@ impl Scanner {
         self.invalid_char = Some(true);
     }
 
-    fn lex_char(&mut self, handle_double_chars: String) {
-        self.token_type =
-            from_lexeme(&handle_double_chars.to_string()).unwrap_or(TokenType::Identifier);
-        self.lexeme = handle_double_chars.to_string();
+    fn lex_char(&mut self, lex: String) {
+        self.token_type = from_lexeme(&lex.to_string()).unwrap_or(TokenType::Identifier);
+        self.lexeme = lex.to_string();
+
+        // TODO: literal if string else null
+        // if self.token_type == TokenType::String {
+        //     self.literal = string_lit
+        // } else {
         self.literal = "null".to_string();
+        // }
 
         println!("{} {} {}", self.token_type, self.lexeme, self.literal);
     }
@@ -64,6 +69,10 @@ impl Scanner {
                     if from_lexeme(&lex).is_none() {
                         self.print_error(current_line, current);
                     } else {
+                        // TODO: if we find a " peek through the next chars til we find the closing "
+                        // if there is none then Error
+                        // else pass through string with "" to lexeme and string wo "" to literal
+
                         self.lex_char(lex);
                     };
                 }
@@ -111,6 +120,10 @@ fn match_next_char(current: char, next: Option<&char>) -> String {
 }
 
 fn from_lexeme(lexeme: &str) -> Option<TokenType> {
+    if lexeme.starts_with("\"") && lexeme.ends_with("\"") {
+        return Some(TokenType::String);
+    }
+
     match lexeme {
         "(" => Some(TokenType::LeftParen),
         ")" => Some(TokenType::RightParen),
