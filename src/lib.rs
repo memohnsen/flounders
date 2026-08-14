@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter, Result};
 
 pub mod scanner;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

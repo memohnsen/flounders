@@ -1,6 +1,6 @@
 use crate::TokenType;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Scanner {
     pub token_type: TokenType,
     pub lexeme: String,
@@ -32,12 +32,11 @@ impl Scanner {
         self.token_type = from_lexeme(&lex.to_string()).unwrap_or(TokenType::Identifier);
         self.lexeme = lex.to_string();
 
-        // TODO: literal if string else null
-        // if self.token_type == TokenType::String {
-        //     self.literal = string_lit
-        // } else {
-        self.literal = "null".to_string();
-        // }
+        if self.token_type == TokenType::String {
+            self.literal = lex.trim_matches('"').to_string();
+        } else {
+            self.literal = "null".to_string();
+        }
 
         println!("{} {} {}", self.token_type, self.lexeme, self.literal);
     }
@@ -72,6 +71,9 @@ impl Scanner {
                         // TODO: if we find a " peek through the next chars til we find the closing "
                         // if there is none then Error
                         // else pass through string with "" to lexeme and string wo "" to literal
+
+                        // if char is " then we continue and mark as such, then just
+                        // keep skipping things until we hit another "
 
                         self.lex_char(lex);
                     };
