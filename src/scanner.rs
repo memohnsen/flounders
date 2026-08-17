@@ -65,6 +65,24 @@ impl Scanner {
                         continue;
                     }
 
+                    if lex == "\"" {
+                        let mut collected = String::new();
+                        while let Some(c) = chars.next() {
+                            if c == '"' {
+                                collected.push(c);
+                                break;
+                            }
+                            collected.push(c);
+                        }
+
+                        self.token_type = TokenType::String;
+                        self.lexeme = collected.to_owned();
+                        self.literal = collected.trim_matches('"').to_string();
+
+                        println!("{} {} {}", self.token_type, self.lexeme, self.literal);
+                        continue;
+                    }
+
                     if from_lexeme(&lex).is_none() {
                         self.print_error(current_line, current);
                     } else {

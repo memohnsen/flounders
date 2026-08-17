@@ -7,7 +7,7 @@
       devShells = nixpkgs.lib.genAttrs systems (system:
         let pkgs = nixpkgs.legacyPackages.${system};
         in { default = pkgs.mkShell {
-          packages = with pkgs; [ rustc cargo clippy rustfmt rust-analyzer just git ];
+          packages = with pkgs; [ rustc cargo clippy rustfmt rust-analyzer just ];
           shellHook = ''echo "Nix dev shell: flounders"'';
         }; });
     };
