@@ -66,8 +66,8 @@ impl Scanner {
                     }
 
                     if lex == "\"" {
-                        let mut collected = String::new();
-                        while let Some(c) = chars.next() {
+                        let mut collected = String::from("\"");
+                        for c in chars.by_ref() {
                             if c == '"' {
                                 collected.push(c);
                                 break;
@@ -75,24 +75,23 @@ impl Scanner {
                             collected.push(c);
                         }
 
-                        self.token_type = TokenType::String;
-                        self.lexeme = collected.to_owned();
-                        self.literal = collected.trim_matches('"').to_string();
+                        if collected.ends_with('"') {
+                            self.token_type = TokenType::String;
+                            self.lexeme = collected.to_owned();
+                            self.literal = collected.trim_matches('"').to_string();
 
-                        println!("{} {} {}", self.token_type, self.lexeme, self.literal);
-                        continue;
+                            println!("{} {} {}", self.token_type, self.lexeme, self.literal);
+                            continue;
+                        } else {
+                            eprintln!("[line {}] Error: Unterminated string.", current_line);
+                            self.invalid_char = Some(true);
+                            continue;
+                        }
                     }
 
                     if from_lexeme(&lex).is_none() {
                         self.print_error(current_line, current);
                     } else {
-                        // TODO: if we find a " peek through the next chars til we find the closing "
-                        // if there is none then Error
-                        // else pass through string with "" to lexeme and string wo "" to literal
-
-                        // if char is " then we continue and mark as such, then just
-                        // keep skipping things until we hit another "
-
                         self.lex_char(lex);
                     };
                 }
