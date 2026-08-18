@@ -1,11 +1,6 @@
-default: choose
-
 # Enter the Nix development shell without direnv.
 nix:
     nix develop
-
-choose:
-    @just choose
 
 test:
     codecrafters test
@@ -13,8 +8,14 @@ test:
 run:
     codecrafters submit
 
-lint:
-    cargo clippy
+run-local:
+    cargo build
+    ./target/debug/codecrafters-interpreter tokenize ./test.lox
 
 build:
     cargo build
+
+test-local:
+    cargo check
+    cargo clippy --all-targets --locked -- -D warnings
+    cargo test

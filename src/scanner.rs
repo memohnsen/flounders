@@ -1,47 +1,54 @@
-use crate::TokenType;
+use crate::token::{TokenType, from_lexeme};
 
 #[derive(Debug, PartialEq)]
 pub struct Scanner {
     pub token_type: TokenType,
     pub lexeme: String,
     pub literal: String,
-    pub invalid_char: Option<bool>,
+    pub invalid_char: bool,
+    pub unterminated_string: bool,
 }
 
 impl Default for Scanner {
     fn default() -> Self {
         Self {
             token_type: TokenType::LeftParen,
-            lexeme: "".to_string(),
-            literal: "".to_string(),
-            invalid_char: None,
+            lexeme: String::new(),
+            literal: String::new(),
+            invalid_char: false,
+            unterminated_string: false,
         }
     }
 }
 
 impl Scanner {
     fn print_error(&mut self, current_line: usize, current: char) {
-        eprintln!(
-            "[line {}] Error: Unexpected character: {}",
-            current_line, current
-        );
-        self.invalid_char = Some(true);
+        if self.unterminated_string {
+            eprintln!("[line {current_line}] Error: Unterminated string.");
+            self.unterminated_string = false;
+        } else {
+            eprintln!("[line {current_line}] Error: Unexpected character: {current}");
+        }
+        self.invalid_char = true;
     }
 
-    fn lex_char(&mut self, lex: String) {
-        self.token_type = from_lexeme(&lex.to_string()).unwrap_or(TokenType::Identifier);
-        self.lexeme = lex.to_string();
-
-        if self.token_type == TokenType::String {
+    fn lex_char(&mut self, lex: &str) {
+        if lex.ends_with('"') && lex.len() > 1 {
+            self.token_type = TokenType::String;
             self.literal = lex.trim_matches('"').to_string();
+        } else if lex.parse::<f32>().is_ok() {
+            self.token_type = TokenType::Number;
+            self.literal = format_decimal(lex.parse().unwrap_or(0.0));
         } else {
+            self.token_type = from_lexeme(lex).unwrap_or(TokenType::Identifier);
             self.literal = "null".to_string();
         }
+        self.lexeme = lex.to_string();
 
         println!("{} {} {}", self.token_type, self.lexeme, self.literal);
     }
 
-    pub fn scan(&mut self, contents: String) {
+    pub fn scan(&mut self, contents: &str) {
         let mut end_of_file = false;
 
         while !end_of_file {
@@ -65,35 +72,47 @@ impl Scanner {
                         continue;
                     }
 
+                    // BUG: skipping the char immediately after the num
+                    // ex: (85+92) skips the +
+                    let mut digits = String::new();
+                    if lex.parse::<u32>().is_ok() {
+                        digits.push_str(&lex);
+                        while let Some(&c) = chars.peek() {
+                            if c.is_ascii_digit() || c == '.' {
+                                digits.push(c);
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        self.lex_char(&digits);
+                        // NOTE:  removing this doesnt fix it, makes parsing break
+                        continue;
+                    }
+
                     if lex == "\"" {
                         let mut collected = String::from("\"");
                         for c in chars.by_ref() {
+                            collected.push(c);
                             if c == '"' {
-                                collected.push(c);
                                 break;
                             }
-                            collected.push(c);
                         }
 
-                        if collected.ends_with('"') {
-                            self.token_type = TokenType::String;
-                            self.lexeme = collected.to_owned();
-                            self.literal = collected.trim_matches('"').to_string();
-
-                            println!("{} {} {}", self.token_type, self.lexeme, self.literal);
-                            continue;
+                        if collected.ends_with('"') && collected.len() > 1 {
+                            self.lex_char(&collected);
                         } else {
-                            eprintln!("[line {}] Error: Unterminated string.", current_line);
-                            self.invalid_char = Some(true);
-                            continue;
+                            self.unterminated_string = true;
+                            self.print_error(current_line, current);
                         }
+                        continue;
                     }
 
-                    if from_lexeme(&lex).is_none() {
-                        self.print_error(current_line, current);
+                    if from_lexeme(&lex).is_some() {
+                        self.lex_char(&lex);
                     } else {
-                        self.lex_char(lex);
-                    };
+                        self.print_error(current_line, current);
+                    }
                 }
             }
             end_of_file = true;
@@ -103,6 +122,16 @@ impl Scanner {
 
 fn is_whitespace(current: &str) -> bool {
     current == " " || current == "\n" || current == "\t" || current == "\r"
+}
+
+fn format_decimal(num: f64) -> String {
+    if num.fract() == 0.0 {
+        // Outputs with .0 if integer
+        format!("{num:.1}")
+    } else {
+        // Outputs all decimals if they exist
+        format!("{num}")
+    }
 }
 
 // Look at the current char and the next char to see if they make up a lexeme together
@@ -138,47 +167,159 @@ fn match_next_char(current: char, next: Option<&char>) -> String {
     }
 }
 
-fn from_lexeme(lexeme: &str) -> Option<TokenType> {
-    if lexeme.starts_with("\"") && lexeme.ends_with("\"") {
-        return Some(TokenType::String);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_match_next_char() {
+        assert_eq!(match_next_char('=', Some(&'=')), "==");
+        assert_eq!(match_next_char('=', Some(&'/')), "=");
+        assert_eq!(match_next_char('!', Some(&'=')), "!=");
+        assert_eq!(match_next_char('!', Some(&'/')), "!");
+        assert_eq!(match_next_char('<', Some(&'=')), "<=");
+        assert_eq!(match_next_char('<', Some(&'-')), "<");
+        assert_eq!(match_next_char('>', Some(&'=')), ">=");
+        assert_eq!(match_next_char('>', Some(&'k')), ">");
+        assert_eq!(match_next_char('/', Some(&'/')), "//");
+        assert_eq!(match_next_char('/', Some(&'=')), "/");
+        assert_eq!(match_next_char('k', Some(&'=')), "k");
     }
 
-    match lexeme {
-        "(" => Some(TokenType::LeftParen),
-        ")" => Some(TokenType::RightParen),
-        "{" => Some(TokenType::LeftBrace),
-        "}" => Some(TokenType::RightBrace),
-        "," => Some(TokenType::Comma),
-        "." => Some(TokenType::Dot),
-        "-" => Some(TokenType::Minus),
-        "+" => Some(TokenType::Plus),
-        ";" => Some(TokenType::Semicolon),
-        "/" => Some(TokenType::Slash),
-        "*" => Some(TokenType::Star),
-        "!" => Some(TokenType::Bang),
-        "!=" => Some(TokenType::BangEqual),
-        "=" => Some(TokenType::Equal),
-        "==" => Some(TokenType::EqualEqual),
-        ">" => Some(TokenType::Greater),
-        ">=" => Some(TokenType::GreaterEqual),
-        "<" => Some(TokenType::Less),
-        "<=" => Some(TokenType::LessEqual),
-        "and" => Some(TokenType::And),
-        "class" => Some(TokenType::Class),
-        "else" => Some(TokenType::Else),
-        "false" => Some(TokenType::False),
-        "fun" => Some(TokenType::Fun),
-        "for" => Some(TokenType::For),
-        "if" => Some(TokenType::If),
-        "nil" => Some(TokenType::Nil),
-        "or" => Some(TokenType::Or),
-        "print" => Some(TokenType::Print),
-        "return" => Some(TokenType::Return),
-        "super" => Some(TokenType::Super),
-        "this" => Some(TokenType::This),
-        "true" => Some(TokenType::True),
-        "var" => Some(TokenType::Var),
-        "while" => Some(TokenType::While),
-        _ => None,
+    #[test]
+    fn test_white_space() {
+        assert!(is_whitespace(" "));
+        assert!(is_whitespace("\n"));
+        assert!(is_whitespace("\r"));
+        assert!(is_whitespace("\t"));
+        assert!(!is_whitespace("t"));
+    }
+
+    #[test]
+    fn test_lexing_chars_mult_chars() {
+        let mut scanner = Scanner::default();
+
+        scanner.lex_char("=");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Equal);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "=");
+
+        scanner.lex_char("<");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Less);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "<");
+
+        scanner.lex_char(">");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Greater);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, ">");
+
+        scanner.lex_char("!");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Bang);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "!");
+
+        scanner.lex_char("!=");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::BangEqual);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "!=");
+
+        scanner.lex_char(">=");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::GreaterEqual);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, ">=");
+
+        scanner.lex_char("<=");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::LessEqual);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "<=");
+
+        scanner.lex_char("==");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::EqualEqual);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "==");
+    }
+
+    #[test]
+    fn test_lexing_strings() {
+        let mut scanner = Scanner::default();
+
+        scanner.lex_char("\"hello\"");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::String);
+        assert_eq!(scanner.literal, "hello");
+        assert_eq!(scanner.lexeme, "\"hello\"");
+
+        scanner.lex_char("\"hello");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Identifier);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "\"hello");
+    }
+
+    #[test]
+    fn full_scanner() {
+        let mut scanner = Scanner::default();
+
+        scanner.scan("=");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Equal);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "=");
+
+        scanner.scan(">// hello");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Greater);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, ">");
+
+        scanner.scan("\"hello\"");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::String);
+        assert_eq!(scanner.literal, "hello");
+        assert_eq!(scanner.lexeme, "\"hello\"");
+
+        scanner.scan("\"hello");
+        assert!(scanner.invalid_char);
+
+        scanner.invalid_char = false;
+        scanner.scan("\"");
+        assert!(scanner.invalid_char);
+
+        scanner.invalid_char = false;
+        scanner.scan("\"\"");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::String);
+        assert_eq!(scanner.literal, "");
+        assert_eq!(scanner.lexeme, "\"\"");
+
+        scanner.scan("42");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Number);
+        assert_eq!(scanner.literal, "42.0");
+        assert_eq!(scanner.lexeme, "42");
     }
 }
