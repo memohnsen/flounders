@@ -1,4 +1,5 @@
 use crate::token::{TokenType, from_lexeme};
+use std::{char, iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
 pub struct Scanner {
@@ -72,32 +73,14 @@ impl Scanner {
                         continue;
                     }
 
-                    // BUG: skipping the char immediately after the num
-                    // ex: (85+92) skips the +
-                    let mut digits = String::new();
                     if lex.parse::<u32>().is_ok() {
-                        digits.push_str(&lex);
-                        while let Some(&c) = chars.peek() {
-                            if c.is_ascii_digit() || c == '.' {
-                                digits.push(c);
-                                chars.next();
-                            } else {
-                                break;
-                            }
-                        }
+                        let digits = handle_numbers(&lex, &mut chars);
                         self.lex_char(&digits);
-                        // NOTE:  removing this doesnt fix it, makes parsing break
                         continue;
                     }
 
                     if lex == "\"" {
-                        let mut collected = String::from("\"");
-                        for c in chars.by_ref() {
-                            collected.push(c);
-                            if c == '"' {
-                                break;
-                            }
-                        }
+                        let collected = handle_quotations(&mut chars);
 
                         if collected.ends_with('"') && collected.len() > 1 {
                             self.lex_char(&collected);
@@ -105,6 +88,12 @@ impl Scanner {
                             self.unterminated_string = true;
                             self.print_error(current_line, current);
                         }
+                        continue;
+                    }
+
+                    if lex.chars().all(char::is_alphabetic) || lex == "_" {
+                        let collected = handle_identifiers(&lex, &mut chars);
+                        self.lex_char(&collected);
                         continue;
                     }
 
@@ -118,6 +107,46 @@ impl Scanner {
             end_of_file = true;
         }
     }
+}
+
+fn handle_identifiers(lex: &str, chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut collected = String::from(lex);
+    while let Some(&c) = chars.peek() {
+        if !c.is_alphanumeric() && c != '_' {
+            break;
+        }
+        collected.push(c);
+        chars.next();
+    }
+
+    collected
+}
+
+fn handle_quotations(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut collected = String::from("\"");
+    for c in chars.by_ref() {
+        collected.push(c);
+        if c == '"' {
+            break;
+        }
+    }
+
+    collected
+}
+
+fn handle_numbers(lex: &str, chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut digits = String::new();
+    digits.push_str(lex);
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() || c == '.' {
+            digits.push(c);
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    digits
 }
 
 fn is_whitespace(current: &str) -> bool {
@@ -273,32 +302,51 @@ mod tests {
         assert_eq!(scanner.token_type, TokenType::Identifier);
         assert_eq!(scanner.literal, "null");
         assert_eq!(scanner.lexeme, "\"hello");
-    }
 
-    #[test]
-    fn full_scanner() {
-        let mut scanner = Scanner::default();
-
-        scanner.scan("=");
-        assert!(!scanner.unterminated_string);
-        assert!(!scanner.invalid_char);
-        assert_eq!(scanner.token_type, TokenType::Equal);
-        assert_eq!(scanner.literal, "null");
-        assert_eq!(scanner.lexeme, "=");
-
-        scanner.scan(">// hello");
-        assert!(!scanner.unterminated_string);
-        assert!(!scanner.invalid_char);
-        assert_eq!(scanner.token_type, TokenType::Greater);
-        assert_eq!(scanner.literal, "null");
-        assert_eq!(scanner.lexeme, ">");
-
-        scanner.scan("\"hello\"");
+        scanner.scan("\"\"");
         assert!(!scanner.unterminated_string);
         assert!(!scanner.invalid_char);
         assert_eq!(scanner.token_type, TokenType::String);
-        assert_eq!(scanner.literal, "hello");
-        assert_eq!(scanner.lexeme, "\"hello\"");
+        assert_eq!(scanner.literal, "");
+        assert_eq!(scanner.lexeme, "\"\"");
+    }
+
+    #[test]
+    fn identifier_edge_cases() {
+        let mut scanner = Scanner::default();
+
+        scanner.scan("foo");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Identifier);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "foo");
+
+        scanner.scan("_foo");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Identifier);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "_foo");
+
+        scanner.scan("foo)");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::RightParen);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, ")");
+
+        scanner.scan("_123bar");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Identifier);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, "_123bar");
+    }
+
+    #[test]
+    fn unterminated_string() {
+        let mut scanner = Scanner::default();
 
         scanner.scan("\"hello");
         assert!(scanner.invalid_char);
@@ -306,14 +354,11 @@ mod tests {
         scanner.invalid_char = false;
         scanner.scan("\"");
         assert!(scanner.invalid_char);
+    }
 
-        scanner.invalid_char = false;
-        scanner.scan("\"\"");
-        assert!(!scanner.unterminated_string);
-        assert!(!scanner.invalid_char);
-        assert_eq!(scanner.token_type, TokenType::String);
-        assert_eq!(scanner.literal, "");
-        assert_eq!(scanner.lexeme, "\"\"");
+    #[test]
+    fn numbers() {
+        let mut scanner = Scanner::default();
 
         scanner.scan("42");
         assert!(!scanner.unterminated_string);
@@ -321,5 +366,17 @@ mod tests {
         assert_eq!(scanner.token_type, TokenType::Number);
         assert_eq!(scanner.literal, "42.0");
         assert_eq!(scanner.lexeme, "42");
+    }
+
+    #[test]
+    fn comments() {
+        let mut scanner = Scanner::default();
+
+        scanner.scan(">// hello");
+        assert!(!scanner.unterminated_string);
+        assert!(!scanner.invalid_char);
+        assert_eq!(scanner.token_type, TokenType::Greater);
+        assert_eq!(scanner.literal, "null");
+        assert_eq!(scanner.lexeme, ">");
     }
 }
